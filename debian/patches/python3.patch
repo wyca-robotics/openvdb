@@ -1,0 +1,19 @@
+Description: Make sure to find python3 and above in case python2 is also
+ installed
+Author: Mathieu Malaterre <malat@debian.org>
+Forwarded: not-needed
+Last-Update: 2021-08-27
+
+Index: openvdb/CMakeLists.txt
+===================================================================
+--- openvdb.orig/CMakeLists.txt
++++ openvdb/CMakeLists.txt
+@@ -237,7 +237,7 @@ if(NOT DISABLE_DEPENDENCY_VERSION_CHECKS
+   set(MINIMUM_TBB_VERSION 2018.0)
+   set(MINIMUM_LLVM_VERSION 6.0.0)
+ 
+-  set(MINIMUM_PYTHON_VERSION 2.7)
++  set(MINIMUM_PYTHON_VERSION 3.7)
+   set(MINIMUM_NUMPY_VERSION 1.14.0)
+ 
+   set(MINIMUM_GOOGLETEST_VERSION 1.8)

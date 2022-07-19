@@ -1,0 +1,144 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+
+ifneq (,$(filter $(DEB_HOST_ARCH), arm64 ppc64el))
+  DEB_BUILD_OPTIONS := $(strip $(filter-out parallel=%, $(DEB_BUILD_OPTIONS)) parallel=2)
+  export DEB_BUILD_OPTIONS
+endif
+
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+# as per upstream request:
+#export DEB_CFLAGS_MAINT_APPEND = -fvisibility=hidden
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+VER_FULL = $(shell dpkg-parsechangelog | grep '^Version' | cut -d' ' -f2 | cut -f1 -d-)
+VER_SONAME = $(shell dpkg-parsechangelog | grep '^Version' | cut -d' ' -f2 | cut -f1 -d- | cut -f1-2 -d.)
+
+#
+CFLAGS+=$(CPPFLAGS) -fvisibility=hidden -fvisibility-inlines-hidden
+CXXFLAGS+=$(CPPFLAGS) -fvisibility=hidden -fvisibility-inlines-hidden
+
+# tbb issue:
+DEB_BUILD_ARCH_CPU := $(shell dpkg-architecture -qDEB_BUILD_ARCH_CPU 2>/dev/null)
+ifeq ($(DEB_BUILD_ARCH_CPU), arm)
+CXXFLAGS+=-Wa,-mimplicit-it=thumb
+endif
+
+# Disable optimization on mips* because the compiler is running out of memory
+# see #847752 / #879636
+ifneq (,$(filter $(DEB_BUILD_ARCH_CPU), mips mipsel sh4))
+CXXFLAGS:=$(filter-out -O2,$(CXXFLAGS)) --param ggc-min-expand=10 -O1
+endif
+# -g is already passed through different mechanism, simply set OPTIMIZE make
+#  variable on mips/el. -g1 seems to be solve symptoms, eg. #890237
+ifneq (,$(filter $(DEB_BUILD_ARCH_CPU), mips mipsel))
+CXXFLAGS+=-g1
+endif
+
+# deduce documentation option (build-indep target)
+ifeq "" "$(filter %-doc,$(shell dh_listpackages))"
+  BUILDDOC = OFF
+else
+  BUILDDOC = ON
+endif
+
+# remove test if specified:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+  BUILDTEST = ON
+else
+  BUILDTEST = OFF
+endif
+
+%:
+	dh $@ --with python3 --buildsystem=cmake
+
+MPL: LICENSE
+	cp -f $< $@
+
+PYVERS := $(shell py3versions -rd)
+
+# https://github.com/AcademySoftwareFoundation/openvdb/issues/144#issuecomment-508984426
+# Also until bug #951704 is fixed in jemalloc, force tbbmalloc usage (auto
+# mode, default to jemalloc)
+CMAKE_EXTRA_FLAGS = -DCMAKE_SKIP_RPATH:BOOL=ON \
+	-DOPENVDB_ENABLE_RPATH:BOOL=OFF \
+	-DOPENVDB_CORE_STATIC:BOOL=OFF \
+	-DCMAKE_BUILD_TYPE:STRING=None \
+	-DCONCURRENT_MALLOC:STRING=Tbbmalloc \
+	-DUSE_LOG4CPLUS:BOOL=ON \
+	-DCMAKE_NO_SYSTEM_FROM_IMPORTED:BOOL=TRUE \
+	-DOPENVDB_BUILD_PYTHON_MODULE:BOOL=ON \
+	-DPython_EXECUTABLE:FILEPATH=/usr/bin/$(PYVERS) \
+	-DOPENVDB_BUILD_DOCS:BOOL=$(BUILDDOC) \
+	-DOPENVDB_BUILD_UNITTESTS:BOOL=$(BUILDTEST) \
+	-DOPENVDB_BUILD_VDB_LOD:BOOL=TRUE \
+	-DOPENVDB_BUILD_VDB_RENDER:BOOL=TRUE \
+	-DOPENVDB_BUILD_VDB_VIEW:BOOL=TRUE \
+	-DUSE_BLOSC:BOOL=TRUE \
+	-DUSE_IMATH_HALF:BOOL=TRUE \
+	-DUSE_NUMPY:BOOL=TRUE
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(CMAKE_EXTRA_FLAGS)
+
+override_dh_auto_test-arch:
+	timeout 2h dh_auto_test -- $(TESTOPS) || true
+
+override_dh_auto_build-indep:
+	dh_auto_build -- doc
+
+# No tests needed for docs
+override_dh_auto_test-indep:
+
+pkg_run = libopenvdb-tools
+pkg_lib = libopenvdb$(VER_SONAME)
+pkg_dev = libopenvdb-dev
+pkg_doc = libopenvdb-doc
+pkg_py  = python3-openvdb
+
+override_dh_install-indep:
+	dh_install -p$(pkg_doc) debian/tmp/usr/share/doc/OpenVDB/html usr/share/doc/libopenvdb-doc/
+
+override_dh_install-arch: manpages
+	dh_numpy3 --package=$(pkg_py)
+	dh_install -p$(pkg_run) debian/tmp/usr/bin
+	dh_install -p$(pkg_lib) debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libopenvdb.so.$(VER_SONAME)
+	dh_install -p$(pkg_lib) debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libopenvdb.so.$(VER_FULL)
+	dh_install -p$(pkg_dev) debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/libopenvdb.so
+	dh_install -p$(pkg_dev) debian/tmp/usr/include
+	dh_install -p$(pkg_py)  debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)/$(PYVERS)/dist-packages/pyopenvdb.so      usr/lib/$(PYVERS)/dist-packages/
+
+override_dh_installdocs: MPL
+	dh_installdocs -A $^
+
+#override_dh_shlibdeps:
+#	dh_shlibdeps --dpkg-shlibdeps-params=--ignore-missing-info
+
+override_dh_clean:
+	dh_clean doc/doxygen_sqlite3.db
+	dh_clean debian/*.1
+
+# man page cannot be automatically generated since we need to cleanup help2man output
+debian/vdb_print.1: debian/vdb_print.1.in
+	LD_PRELOAD= LD_LIBRARY_PATH=./debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH) help2man --version-string=$(VER_FULL) --include=$< --output=$@ --no-info --no-discard-stderr ./debian/tmp/usr/bin/vdb_print
+
+debian/vdb_view.1: debian/vdb_view.1.in
+	LD_PRELOAD= LD_LIBRARY_PATH=./debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH) help2man --version-string=$(VER_FULL) --include=$< --output=$@ --no-info --no-discard-stderr ./debian/tmp/usr/bin/vdb_view
+
+debian/vdb_render.1: debian/vdb_render.1.in
+	LD_PRELOAD= LD_LIBRARY_PATH=./debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH) help2man --version-string=$(VER_FULL) --include=$< --output=$@ --no-info --no-discard-stderr ./debian/tmp/usr/bin/vdb_render
+
+debian/vdb_lod.1: debian/vdb_lod.1.in
+	LD_PRELOAD= LD_LIBRARY_PATH=./debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH) help2man --version-string=$(VER_FULL) --include=$< --output=$@ --no-info --no-discard-stderr ./debian/tmp/usr/bin/vdb_lod
+
+.PHONY: manpages
+
+manpages: debian/vdb_print.1 debian/vdb_view.1 debian/vdb_render.1 debian/vdb_lod.1
+
+get-orig-source:
+	uscan --verbose --force-download --rename --repack
+
+override_dh_builddeb:
+	dh_builddeb -- -Zgzip
+

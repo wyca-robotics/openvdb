@@ -1,0 +1,31 @@
+Description: unit test would not run
+ Add LD_LIBRARY_PATH so that unit test can run
+Author: Mathieu Malaterre <malat@debian.org>
+Forwarded: no
+Last-Update: 2021-08-27
+
+Index: openvdb/openvdb/openvdb/python/CMakeLists.txt
+===================================================================
+--- openvdb.orig/openvdb/openvdb/python/CMakeLists.txt
++++ openvdb/openvdb/openvdb/python/CMakeLists.txt
+@@ -303,5 +303,9 @@ if(OPENVDB_BUILD_PYTHON_UNITTESTS)
+   else()
+     set_tests_properties(pytest PROPERTIES
+       ENVIRONMENT "PYTHONPATH=$ENV{PYTHONPATH}:${CMAKE_CURRENT_BINARY_DIR}")
++    set_property(TEST pytest PROPERTY ENVIRONMENT
++       PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}
++       LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/..
++       )
+   endif()
+ endif()
+Index: openvdb/openvdb/openvdb/unittest/CMakeLists.txt
+===================================================================
+--- openvdb.orig/openvdb/openvdb/unittest/CMakeLists.txt
++++ openvdb/openvdb/openvdb/unittest/CMakeLists.txt
+@@ -236,3 +236,6 @@ if(OPENVDB_ENABLE_RPATH)
+ endif()
+ 
+ add_test(vdb_unit_test vdb_test -v)
++set_property(TEST vdb_unit_test PROPERTY ENVIRONMENT
++   LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/..
++   )

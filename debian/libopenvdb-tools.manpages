@@ -1,0 +1,4 @@
+debian/vdb_lod.1
+debian/vdb_print.1
+debian/vdb_render.1
+debian/vdb_view.1

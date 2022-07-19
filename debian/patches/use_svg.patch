@@ -1,0 +1,17 @@
+Description: Save some space on debian ftp
+Author: Mathieu Malaterre <malat@debian.org>
+Forwarded: not-needed
+Last-Update: 2021-08-26
+
+Index: openvdb/doc/CMakeLists.txt
+===================================================================
+--- openvdb.orig/doc/CMakeLists.txt
++++ openvdb/doc/CMakeLists.txt
+@@ -63,6 +63,7 @@ set(DOXYGEN_RECURSIVE NO)
+ set(DOXYGEN_GENERATE_HTML YES)
+ set(DOXYGEN_GENERATE_MAN NO)
+ set(DOXYGEN_GENERATE_LATEX NO)
++set(DOXYGEN_DOT_IMAGE_FORMAT svg)
+ 
+ set(DOXYGEN_HTML_COLORSTYLE_HUE 4)
+ set(DOXYGEN_HTML_COLORSTYLE_SAT 222)

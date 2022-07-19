@@ -1,0 +1,19 @@
+Description: Fix compilation error with missing atomic
+ TBB requires -latomic on arch where copy-on-swap is missing
+ (eg ppc32, armel...)
+Author: Mathieu Malaterre <malat@debian.org>
+Forwarded: no
+Last-Update: 2021-08-27
+
+Index: openvdb/openvdb/openvdb/CMakeLists.txt
+===================================================================
+--- openvdb.orig/openvdb/openvdb/CMakeLists.txt
++++ openvdb/openvdb/openvdb/CMakeLists.txt
+@@ -226,6 +226,7 @@ list(APPEND OPENVDB_CORE_DEPENDENT_LIBS
+ 
+ if(UNIX)
+   list(APPEND OPENVDB_CORE_DEPENDENT_LIBS Threads::Threads)
++  list(APPEND OPENVDB_CORE_DEPENDENT_LIBS atomic)
+ endif()
+ 
+ ##########################################################################

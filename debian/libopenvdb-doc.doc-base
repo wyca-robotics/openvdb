@@ -1,0 +1,9 @@
+Document: libopenvdb-doc
+Title: Technical Introduction to OpenVDB
+Author: OpenVDB team
+Abstract: This document presents a brief overview of OpenVDB
+Section: Programming/C++
+
+Format: HTML
+Index: /usr/share/doc/libopenvdb-doc/html/index.html
+Files: /usr/share/doc/libopenvdb-doc/html/*
